@@ -1,32 +1,89 @@
 import os
 import sys
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String, DateTime, Text, Table
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy import create_engine
 from eralchemy2 import render_er
+from datetime import datetime
 
 Base = declarative_base()
 
-class Person(Base):
-    __tablename__ = 'person'
-    # Here we define columns for the table person
-    # Notice that each column is also a normal Python instance attribute.
-    id = Column(Integer, primary_key=True)
-    name = Column(String(250), nullable=False)
+# Many-to-Many relationship table for followers
+followers = Table('followers',
+    Base.metadata,
+    Column('follower_id', Integer, ForeignKey('user.id'), primary_key=True),
+    Column('followed_id', Integer, ForeignKey('user.id'), primary_key=True)
+)
 
-class Address(Base):
-    __tablename__ = 'address'
-    # Here we define columns for the table address.
-    # Notice that each column is also a normal Python instance attribute.
-    id = Column(Integer, primary_key=True)
-    street_name = Column(String(250))
-    street_number = Column(String(250))
-    post_code = Column(String(250), nullable=False)
-    person_id = Column(Integer, ForeignKey('person.id'))
-    person = relationship(Person)
+# Many-to-Many relationship table for post likes
+post_likes = Table('post_likes',
+    Base.metadata,
+    Column('user_id', Integer, ForeignKey('user.id'), primary_key=True),
+    Column('post_id', Integer, ForeignKey('post.id'), primary_key=True)
+)
 
-    def to_dict(self):
-        return {}
+class User(Base):
+    __tablename__ = 'user'
+    
+    id = Column(Integer, primary_key=True)
+    username = Column(String(80), unique=True, nullable=False)
+    email = Column(String(120), unique=True, nullable=False)
+    password = Column(String(250), nullable=False)
+    full_name = Column(String(120), nullable=False)
+    bio = Column(Text)
+    profile_picture = Column(String(250))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Integer, default=1)
+    
+    # Relationships
+    posts = relationship('Post', back_populates='user')
+    comments = relationship('Comment', back_populates='user')
+    followers = relationship('User', 
+        secondary=followers,
+        primaryjoin=(followers.c.followed_id == id),
+        secondaryjoin=(followers.c.follower_id == id),
+        backref='following'
+    )
+
+class Post(Base):
+    __tablename__ = 'post'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    image_url = Column(String(250), nullable=False)
+    caption = Column(Text)
+    location = Column(String(150))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship('User', back_populates='posts')
+    comments = relationship('Comment', back_populates='post')
+    likes = relationship('User', secondary=post_likes, backref='liked_posts')
+
+class Comment(Base):
+    __tablename__ = 'comment'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    post_id = Column(Integer, ForeignKey('post.id'), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship('User', back_populates='comments')
+    post = relationship('Post', back_populates='comments')
+
+class Story(Base):
+    __tablename__ = 'story'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    media_url = Column(String(250), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    
+    # Relationships
+    user = relationship('User')
 
 ## Draw from SQLAlchemy base
 try:
